@@ -37,8 +37,6 @@ logs/
 Thumbs.db
 Desktop.ini
 
-# dotenv environment variables file
-.env
 
 # Hapi specific
 .hapijs
@@ -46,3 +44,6 @@ Desktop.ini
 # Build directories
 dist/
 build/
+dicoding-notes-backend.pem
+.env
+.prod.env
