@@ -1,50 +1,68 @@
-import pg from 'pg'
-import InvariantError from '../../exceptions/InvariantError.js';
-import { nanoid } from 'nanoid';
-import argon2 from 'argon2';
-import NotFoundError from '../../exceptions/NotFoundError.js';
+import pg from "pg";
+import InvariantError from "../../exceptions/InvariantError.js";
+import { nanoid } from "nanoid";
+import argon2, { verify } from "argon2";
+import NotFoundError from "../../exceptions/NotFoundError.js";
+import AuthenticationError from "../../exceptions/AuthenticationError.js";
 
-class UsersService{
-
+class UsersService {
   constructor() {
     this._pool = new pg.Pool();
   }
-  async addUser({username,password,fullname}){
-    await this.verifyUser({username});
+  async addUser({ username, password, fullname }) {
+    await this.verifyUser({ username });
     // TODO: Bila verifikasi lolos, maka masukkan user baru ke database.
     const id = `user-${nanoid(16)}`;
     const hashedPassword = await argon2.hash(password);
     const query = {
-      text: 'INSERT INTO users VALUES($1, $2, $3, $4) RETURNING id',
+      text: "INSERT INTO users VALUES($1, $2, $3, $4) RETURNING id",
       values: [id, username, hashedPassword, fullname],
-    }
-    const result = await this._pool.query(query);
-    if(!result.rows.length){
-      throw new InvariantError('User gagal ditambahkan')
-    }
-    return result.rows[0].id
-  }
-  async verifyUser({username,password}){
-    const query={
-      text:'SELECT username FROM users WHERE username = $1',
-      values:[username]
-    }
-    const result = await this._pool.query(query);
-    if (result.rows.length > 0) {
-      throw new InvariantError('Gagal menambahkan user. Username sudah digunakan.');
-    }
-  }
-  async getUserById(userId){
-    const query = {
-      text: 'SELECT id, username, fullname FROM users WHERE id = $1',
-      values: [userId],
-    }
+    };
     const result = await this._pool.query(query);
     if (!result.rows.length) {
-      throw new NotFoundError('User tidak ditemukan');
+      throw new InvariantError("User gagal ditambahkan");
+    }
+    return result.rows[0].id;
+  }
+  async verifyUser({ username, password }) {
+    const query = {
+      text: "SELECT username FROM users WHERE username = $1",
+      values: [username],
+    };
+    const result = await this._pool.query(query);
+    if (result.rows.length > 0) {
+      throw new InvariantError(
+        "Gagal menambahkan user. Username sudah digunakan."
+      );
+    }
+  }
+  async getUserById(userId) {
+    const query = {
+      text: "SELECT id, username, fullname FROM users WHERE id = $1",
+      values: [userId],
+    };
+    const result = await this._pool.query(query);
+    if (!result.rows.length) {
+      throw new NotFoundError("User tidak ditemukan");
     }
     return result.rows[0];
   }
+  async verifyUserCredential(username, password) {
+    const query = {
+      text: "SELECT id, password FROM users WHERE username = $1",
+      values: [username],
+    };
+    const result = await this._pool.query(query);
+    if (!result.rows.length) {
+      throw new AuthenticationError("Kredensial yang Anda berikan salah");
+    }
+    const {id,password: hashedPassword} = result.rows[0];
+    const match = await argon2.verify(hashedPassword, password);
+    if (!match) {
+      throw new AuthenticationError("Kredensial yang Anda berikan salah");
+    }
+    return id;
+  }
 }
 
-export default UsersService
+export default UsersService;
