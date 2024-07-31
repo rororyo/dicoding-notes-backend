@@ -84,9 +84,12 @@ class NotesHandler {
 
   async getNoteByIdHandler(request, h) {
     const { id } = request.params;
+    const { id: credentialId } = request.auth.credentials;
+ 
+    await this._service.verifyNoteAccess(id, credentialId);
     const note = await this._service.getNoteById(id);
     return {
-      status: "success",
+      status: 'success',
       data: {
         note,
       },
@@ -94,34 +97,16 @@ class NotesHandler {
   }
 
   async putNoteByIdHandler(request, h) {
-    try{
-          this._validator.validateNotePayload(request.payload);
+    this._validator.validateNotePayload(request.payload);
     const { id } = request.params;
-    const {id:credentialId} = request.auth.credentials
-    await this._service.verifyNoteOwner(id, credentialId)
+    const { id: credentialId } = request.auth.credentials;
+ 
+    await this._service.verifyNoteAccess(id, credentialId);
     await this._service.editNoteById(id, request.payload);
-
     return {
-      status: "success",
-      message: "Catatan berhasil diperbarui",
+      status: 'success',
+      message: 'Catatan berhasil diperbarui',
     };
-    }
-    catch(err){
-      if(err instanceof ClientError){
-        const response = h.response({
-          status: "fail",
-          message: err.message,
-        })
-      }
-      const response = h.response({
-        status: "error",
-        message: "Maaf, terjadi kegagalan pada server kami.",
-      });
-      response.code(500);
-      console.error(err);
-      return response
-    }
-
   }
 
   async deleteNoteByIdHandler(request, h) {

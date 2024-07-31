@@ -6,8 +6,9 @@ import InvariantError from '../../exceptions/InvariantError.js';
 import AuthorizationError from '../../exceptions/AuthorizationError.js';
 
 class NotesService {
-  constructor() {
+  constructor(collaborationService) {
     this._pool = new pg.Pool();
+    this._collaborationService = collaborationService;
   }
 
   async addNote({ title, body, tags,owner }) {
@@ -27,7 +28,7 @@ class NotesService {
 
   async getNotes(owner) {
     const query = {
-      text: 'select * from notes where owner = $1',
+      text: 'select notes.* from notes left join collaborations ON collaborations.note_id = notes.id where owner = $1 OR collaborations.user_id = $1 group by notes.id',
       values: [owner],
     };
     const result = await this._pool.query(query);
@@ -36,15 +37,21 @@ class NotesService {
 
   async getNoteById(id) {
     const query = {
-      text: 'select * from notes where id = $1',
+      text: `SELECT notes.*, users.username
+      FROM notes
+      LEFT JOIN users ON users.id = notes.owner
+      WHERE notes.id = $1`,
       values: [id],
     };
     const result = await this._pool.query(query);
+   
     if (!result.rows.length) {
       throw new NotFoundError('Catatan tidak ditemukan');
     }
+   
     return result.rows.map(mapDBToModel)[0];
   }
+  
 
   async editNoteById(id, { title, body, tags }) {
     const updatedAt = new Date().toISOString();
@@ -80,6 +87,20 @@ class NotesService {
     const note = result.rows[0];
     if (note.owner !== owner) {
       throw new AuthorizationError('Anda tidak berhak mengakses resource ini');
+    }
+  }
+  async verifyNoteAccess(noteId, userId) {
+    try{
+      await this.verifyNoteOwner(noteId, userId)
+    }catch(error){
+      if(error instanceof NotFoundError){
+        throw error
+      }
+    }
+    try{
+      await this._collaborationService.verifyCollaborator(noteId, userId)
+    } catch(error){
+      throw error
     }
   }
 }

@@ -1,26 +1,33 @@
 import env from 'dotenv';
 import Hapi from '@hapi/hapi';
 import Jwt from '@hapi/jwt';
-//notes
+// notes
 import notesPlugin from './api/notes/index.js';
 import NotesValidator from './validator/notes/index.js';
-import NotesService from './services/postgres/NotesService.js'
-//users
+import NotesService from './services/postgres/NotesService.js';
+// users
 import usersPlugin from './api/users/index.js';
 import UsersService from './services/postgres/UsersService.js';
 import UsersValidator from './validator/users/index.js';
-//authentications
+// authentications
 import authenticationsPlugin from './api/authentications/index.js';
 import AuthenticationsService from './services/postgres/AuthenticationsService.js';
 import TokenManager from './tokenize/TokenManager.js';
 import AuthenticationsValidator from './validator/authentications/index.js';
+// collaborations
+import collaborationsPlugin from './api/collaborations/index.js';
+import CollaborationsService from './services/postgres/CollaborationsService.js';
+import CollaborationsValidator from './validator/collaborations/index.js';
 
 import ClientError from './exceptions/ClientError.js';
 import { verify } from 'argon2';
+
 env.config();
+
 const init = async () => {
-  const notesService = new NotesService
-  const usersService = new UsersService
+  const collaborationsService = new CollaborationsService();
+  const notesService = new NotesService(collaborationsService);
+  const usersService = new UsersService();
   const authenticationsService = new AuthenticationsService();
   const server = Hapi.server({
     port: process.env.PORT,
@@ -31,29 +38,32 @@ const init = async () => {
       },
     },
   });
-  //plugin external
+
+  // Register external plugin
   await server.register([
     {
       plugin: Jwt,
     },
-  ])
-  //strategi autentikasi jwt
+  ]);
+
+  // JWT authentication strategy
   server.auth.strategy('notesapp_jwt', 'jwt', {
-    keys:process.env.ACCESS_TOKEN_KEY,
-    verify:{
+    keys: process.env.ACCESS_TOKEN_KEY,
+    verify: {
       aud: false,
       iss: false,
       sub: false,
-      maxAgeSec: process.env.ACCESS_TOKEN_AGE
+      maxAgeSec: process.env.ACCESS_TOKEN_AGE,
     },
-    validate:(artifacts)=>({
-      isValid:true,
-      credentials:{
-        id:artifacts.decoded.payload.id
+    validate: (artifacts) => ({
+      isValid: true,
+      credentials: {
+        id: artifacts.decoded.payload.id,
       },
     }),
-  })
-  //plugin internal
+  });
+
+  // Register internal plugins
   await server.register([
     {
       plugin: notesPlugin,
@@ -78,33 +88,31 @@ const init = async () => {
         validator: AuthenticationsValidator,
       },
     },
+    {
+      plugin: collaborationsPlugin,
+      options: {
+        service: collaborationsService, // corrected variable name
+        notesService,
+        validator: CollaborationsValidator,
+      },
+    },
   ]);
-  server.ext('onPreResponse',(request,h)=>{
-    const {response} = request
-    if(response instanceof ClientError){
+
+  server.ext('onPreResponse', (request, h) => {
+    const { response } = request;
+    if (response instanceof ClientError) {
       const newResponse = h.response({
         status: 'fail',
-        message: response.message
-      })
-      newResponse.code(response.statusCode)
-      return newResponse
+        message: response.message,
+      });
+      newResponse.code(response.statusCode);
+      return newResponse;
     }
     return h.continue;
-  })
+  });
+
   await server.start();
   console.log(`Server berjalan pada ${server.info.uri}`);
 };
-// registrasi banyak plugin sekaligus
-//   await server.register([
-//     {
-//       plugin: notesPlugin,
-//       options: { notes: [] },
-//     },
-//     {
-//       plugin: otherPlugin,
-//       options: { /* berikan nilai options jika dibutuhkan */ }
-//     }
-//   ]);
- 
 
 init();
