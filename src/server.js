@@ -18,10 +18,11 @@ import AuthenticationsValidator from './validator/authentications/index.js';
 import collaborationsPlugin from './api/collaborations/index.js';
 import CollaborationsService from './services/postgres/CollaborationsService.js';
 import CollaborationsValidator from './validator/collaborations/index.js';
-
+//Exports
+import exportsPlugin from './api/exports/index.js';
+import ProducerService from './services/rabbitmq/ProducerService.js';
+import ExportsValidator from './validator/exports/index.js';
 import ClientError from './exceptions/ClientError.js';
-import { verify } from 'argon2';
-
 env.config();
 
 const init = async () => {
@@ -91,11 +92,18 @@ const init = async () => {
     {
       plugin: collaborationsPlugin,
       options: {
-        service: collaborationsService, // corrected variable name
+        service: collaborationsService, 
         notesService,
         validator: CollaborationsValidator,
       },
     },
+    {
+      plugin: exportsPlugin,
+      options:{
+        service: ProducerService,
+        validator: ExportsValidator,
+      }
+    }
   ]);
 
   server.ext('onPreResponse', (request, h) => {

@@ -1,6 +1,5 @@
 import routes from "./routes.js";
 import AuthenticationsHandler from "./handler.js";
-import { server } from "@hapi/hapi";
 
 const authenticationsPlugin = {
   name: "authentications",
